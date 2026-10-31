@@ -1,4 +1,7 @@
 using System;
+#if NET8_0_OR_GREATER
+using System.Diagnostics.CodeAnalysis;
+#endif
 using System.Runtime.InteropServices;
 using ZenStates.Core.Drivers;
 
@@ -229,20 +232,28 @@ namespace ZenStates.Core.Hardware
         public static byte[] ByteSignature(string ascii) => BitConverter.GetBytes(Signature(ascii));
         public static byte[] ByteSignatureUL(string ascii) => BitConverter.GetBytes(SignatureUL(ascii));
 
+#if NET8_0_OR_GREATER
+        public T GetHeader<[DynamicallyAccessedMembers(
+            DynamicallyAccessedMemberTypes.PublicConstructors |
+            DynamicallyAccessedMemberTypes.NonPublicConstructors)] T>(uint address, int length = 36) where T : new()
+#else
         public T GetHeader<T>(uint address, int length = 36) where T : new()
+#endif
         {
             byte[] bytes = io.ReadMemory(new IntPtr(address), length);
-#pragma warning disable IL2091 // T is constrained to struct (a blittable value-type layout); ByteArrayToStructure<T> marshals it via Marshal.PtrToStructure, which does not reflect over T's constructors at this call site.
             return Utils.ByteArrayToStructure<T>(bytes);
-#pragma warning restore IL2091
         }
 
+#if NET8_0_OR_GREATER
+        public T GetHeader<[DynamicallyAccessedMembers(
+            DynamicallyAccessedMemberTypes.PublicConstructors |
+            DynamicallyAccessedMemberTypes.NonPublicConstructors)] T>(ulong address, int length = 36) where T : new()
+#else
         public T GetHeader<T>(ulong address, int length = 36) where T : new()
+#endif
         {
             byte[] bytes = io.ReadMemory(new IntPtr((long)address), length);
-#pragma warning disable IL2091 // T is constrained to struct (a blittable value-type layout); ByteArrayToStructure<T> marshals it via Marshal.PtrToStructure, which does not reflect over T's constructors at this call site.
             return Utils.ByteArrayToStructure<T>(bytes);
-#pragma warning restore IL2091
         }
 
         public RSDP GetRsdp()

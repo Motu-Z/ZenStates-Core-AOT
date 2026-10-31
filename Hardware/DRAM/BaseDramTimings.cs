@@ -141,6 +141,13 @@ namespace ZenStates.Core.Hardware.DRAM
             return TryReadRegister(address, out uint value) ? value : 0;
         }
 
+#if NET8_0_OR_GREATER
+        [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("Trimming", "IL2026",
+            Justification = "ConvertValue reflects over op_Implicit/op_Explicit of the DRAM timing property types, " +
+                            "which are members of this assembly and are preserved in full by AotRoots.xml. " +
+                            "Marking the public indexer [RequiresUnreferencedCode] instead would push the burden " +
+                            "onto every consumer, so the suppression is scoped here.")]
+#endif
         public object this[string propertyName]
         {
             get
@@ -168,9 +175,7 @@ namespace ZenStates.Core.Hardware.DRAM
                         PropertyInfo propertyInfo = GetPropertyInfo(propertyName);
                         if (propertyInfo != null)
                         {
-#pragma warning disable IL2026
                             object converted = Utils.ConvertValue(value, propertyInfo.PropertyType);
-#pragma warning restore IL2026
                             //if (converted != null)
                             {
                                 propertyInfo.SetValue(this, converted, null);
@@ -185,6 +190,12 @@ namespace ZenStates.Core.Hardware.DRAM
             }
         }
 
+#if NET8_0_OR_GREATER
+        [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("Trimming", "IL2075",
+            Justification = "Reflects over public properties of the concrete timing type in this assembly, " +
+                            "which is preserved in full by AotRoots.xml; the runtime type cannot be " +
+                            "annotated at this call site.")]
+#endif
         private PropertyInfo GetPropertyInfo(string propertyName)
         {
             PropertyInfo info = GetType().GetProperty(propertyName);
