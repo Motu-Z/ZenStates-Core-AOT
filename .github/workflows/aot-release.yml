@@ -1,0 +1,24 @@
+name: Build ZenStates-Core DLL
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+        
+    - name: Restore and Build
+      run: dotnet build ZenStates-Core.csproj -c Release
+
+    - name: Upload DLL Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ZenStates-Core-DLL
+        path: bin/Release/net8.0-windows/ZenStates-Core.dll
