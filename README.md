@@ -5,6 +5,10 @@
 > A **Native AOT-compatible** fork of [`irusanov/ZenStates-Core`](https://github.com/irusanov/ZenStates-Core),
 > maintained to provide the AOT-ready low-level foundation for the main project **Zentwik**.
 
+> [!IMPORTANT]
+> 本分支为 Native AOT 兼容版，WMI 相关功能（如 `AOD.GetWmiFunctions`）必须在管理员权限下运行。
+> This AOT fork runs WMI-backed features (e.g. `AOD.GetWmiFunctions`) only when elevated (Run as administrator).
+
 ## Fork & AOT Changes
 
 This repository is a maintained fork of the original ZenStates-Core by

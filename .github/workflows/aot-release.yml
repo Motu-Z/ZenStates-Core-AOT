@@ -14,7 +14,7 @@ on:
 
 jobs:
   build:
-    name: Build ZenStates-Core
+    name: Build, test and AOT-verify
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -28,8 +28,17 @@ jobs:
       - name: Restore
         run: dotnet restore ZenStates-Core.csproj
 
-      - name: Build
-        run: dotnet build ZenStates-Core.csproj -c ${{ inputs.configuration }} --no-restore
+      # Gate 1: the smoke test must pass before anything is published.
+      - name: Smoke test
+        run: dotnet run --project ZenStates.Core.Tests/ZenStates.Core.Tests.csproj -c ${{ inputs.configuration }}
+
+      # Gate 2: IsAotCompatible turns on the AOT/trim analyzers, so any IL2xxx/IL3050 becomes an error here.
+      - name: Build (warnings as errors)
+        run: dotnet build ZenStates-Core.csproj -c ${{ inputs.configuration }} --no-restore -p:TreatWarningsAsErrors=true
+
+      # Gate 3: full ILC publish. Any trimmer/ILC warning fails the build, so an AOT-unsafe DLL is never produced.
+      - name: Publish (AOT, warnings as errors)
+        run: dotnet publish ZenStates-Core.csproj -c ${{ inputs.configuration }} -f net8.0-windows -r win-x64 -p:TreatWarningsAsErrors=true
 
       - name: Upload DLL
         uses: actions/upload-artifact@v4
@@ -38,3 +47,4 @@ jobs:
           path: |
             bin/${{ inputs.configuration }}/net8.0-windows/*.dll
             bin/${{ inputs.configuration }}/netstandard2.1/*.dll
+            bin/${{ inputs.configuration }}/net8.0-windows/win-x64/publish/*.dll

@@ -2,6 +2,8 @@
   <PropertyGroup>
     <RootNamespace>ZenStates.Core</RootNamespace>
     <TargetFrameworks>netstandard2.1;net8.0-windows</TargetFrameworks>
+    <!-- The smoke-test host lives below this project; keep it out of the default **/*.cs glob. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);ZenStates.Core.Tests/**</DefaultItemExcludes>
     <AssemblyTitle>ZenStates.Core</AssemblyTitle>
     <Company>irusanov</Company>
     <Product>ZenStates.Core</Product>
