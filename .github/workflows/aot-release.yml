@@ -1,7 +1,5 @@
 name: AOT Release Build
 
-# 仅手动触发：本仓库不配置自动构建/上游同步，所有编译由维护者手动发起。
-# This workflow is triggered manually only (workflow_dispatch). No scheduled or push builds.
 on:
   workflow_dispatch:
     inputs:
