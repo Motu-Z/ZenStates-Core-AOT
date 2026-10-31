@@ -1,24 +1,42 @@
-name: Build ZenStates-Core DLL
+name: AOT Release Build
+
+# 仅手动触发：本仓库不配置自动构建/上游同步，所有编译由维护者手动发起。
+# This workflow is triggered manually only (workflow_dispatch). No scheduled or push builds.
 on:
-  push:
-    branches: [ master ]
   workflow_dispatch:
+    inputs:
+      configuration:
+        description: 'Build configuration'
+        required: true
+        default: 'Release'
+        type: choice
+        options:
+          - Release
+          - Debug
 
 jobs:
   build:
+    name: Build ZenStates-Core
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '8.0.x'
-        
-    - name: Restore and Build
-      run: dotnet build ZenStates-Core.csproj -c Release
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Upload DLL Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: ZenStates-Core-DLL
-        path: bin/Release/net8.0-windows/ZenStates-Core.dll
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore ZenStates-Core.csproj
+
+      - name: Build
+        run: dotnet build ZenStates-Core.csproj -c ${{ inputs.configuration }} --no-restore
+
+      - name: Upload DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZenStates-Core-${{ inputs.configuration }}
+          path: |
+            bin/${{ inputs.configuration }}/net8.0-windows/*.dll
+            bin/${{ inputs.configuration }}/netstandard2.1/*.dll
