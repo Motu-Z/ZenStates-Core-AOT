@@ -1,23 +1,41 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Management;
 using System.ServiceProcess;
-using static System.Management.ManagementObjectCollection;
+using WmiLight;
 
 namespace ZenStates.Core.Hardware
 {
+    /// <summary>
+    /// WMI access layer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This class used to be built on <c>System.Management</c>, whose late-bound COM interop cannot be
+    /// compiled by Native AOT. It is now implemented on top of WmiLight, which talks to WMI through a thin
+    /// native shim and is therefore AOT-safe. The public member names, parameter names and semantics are
+    /// unchanged; only the WMI object types were replaced by the AOT-safe <see cref="WmiScope"/> /
+    /// <see cref="WmiInstance"/> wrappers.
+    /// </para>
+    /// <para>
+    /// Removed: <c>RunCommand(WmiInstance, uint, uint)</c>. It marshalled a <c>byte[]</c> ("Inbuf") into a
+    /// WMI method call, which WmiLight 7.x cannot express - <c>WmiObject</c> only exposes typed scalar and
+    /// <c>string[]</c> setters and has no <c>byte[]</c> overload. It had no callers inside this assembly.
+    /// </para>
+    /// </remarks>
     public static class WMI
     {
-        public static object TryGetProperty(ManagementObject wmiObj, string propertyName)
+        public static object TryGetProperty(WmiInstance wmiObj, string propertyName)
         {
             object retval = null;
             try
             {
                 retval = wmiObj.GetPropertyValue(propertyName);
             }
-            catch (ManagementException ex)
+            catch (Exception ex)
             {
+                // An unknown property surfaces as a COMException (WBEM_E_NOT_FOUND) rather than a
+                // WmiException; both must degrade to null, as ManagementObject.GetPropertyValue did.
                 Debug.WriteLine(ex.Message);
             }
 
@@ -25,53 +43,74 @@ namespace ZenStates.Core.Hardware
         }
 
         //root\wmi
-        public static ManagementScope Connect(string scope)
+        public static WmiScope Connect(string scope)
         {
             try
             {
                 using (var sc = new ServiceController("Winmgmt"))
                 {
                     if (sc.Status != ServiceControllerStatus.Running)
-                        throw new ManagementException(@"Windows Management Instrumentation service is not running");
+                        throw new InvalidOperationException(
+                            "Windows Management Instrumentation service is not running");
                 }
 
-                ManagementScope mScope = new ManagementScope(scope);
-                mScope.Connect();
+                WmiScope wmiScope = new WmiScope(scope);
+                wmiScope.Connect();
 
-                if (mScope.IsConnected)
-                    return mScope;
-                else
-                    throw new ManagementException($@"Failed to connect to {scope}");
+                if (wmiScope.IsConnected)
+                    return wmiScope;
+
+                wmiScope.Dispose();
+                throw new InvalidOperationException(string.Format("Failed to connect to {0}", scope));
             }
-            catch (ManagementException ex)
+            catch (Exception ex)
             {
                 Debug.WriteLine(string.Format("WMI: {0}", ex.Message));
                 throw;
             }
         }
 
-        public static ManagementObject Query(string scope, string wmiClass)
+        /// <summary>
+        /// Returns the first instance of <paramref name="wmiClass"/>, detached from the query enumerator.
+        /// The returned instance owns its WMI connection; dispose it when done.
+        /// </summary>
+        public static WmiInstance Query(string scope, string wmiClass)
         {
+            return QueryInternal(scope, string.Format("SELECT * FROM {0}", wmiClass));
+        }
+
+        /// <summary>
+        /// Returns the single instance of <paramref name="wmiClass"/> whose <c>InstanceName</c> matches.
+        /// Equivalent to the previous <c>new ManagementObject(scope, "Class.InstanceName='x'", null)</c>.
+        /// </summary>
+        public static WmiInstance GetInstance(string scope, string wmiClass, string instanceName)
+        {
+            if (string.IsNullOrEmpty(instanceName))
+                return null;
+
+            // WQL string literal: a single quote is escaped by doubling it.
+            string escaped = instanceName.Replace("'", "''");
+
+            return QueryInternal(scope, string.Format(
+                "SELECT * FROM {0} WHERE InstanceName='{1}'", wmiClass, escaped));
+        }
+
+        private static WmiInstance QueryInternal(string scope, string wql)
+        {
+            WmiConnection connection = null;
+            bool handedOff = false;
+
             try
             {
-                using (var searcher = new ManagementObjectSearcher(
-                    new ManagementScope(scope),
-                    new ObjectQuery($"SELECT * FROM {wmiClass}")))
+                connection = new WmiConnection(scope);
+                connection.Open();
+
+                foreach (WmiObject obj in connection.CreateQuery(wql))
                 {
-                    using (ManagementObjectCollection results = searcher.Get())
-                    using (ManagementObjectEnumerator enumerator = results.GetEnumerator())
-                    {
-                        if (enumerator.MoveNext())
-                        {
-                            ManagementObject current = enumerator.Current as ManagementObject;
-                            if (current != null)
-                            {
-                                ManagementObject detached = new ManagementObject(current.Path.Path);
-                                detached.Get();
-                                return detached;
-                            }
-                        }
-                    }
+                    // Ownership of the connection moves to the instance: WmiLight releases the native
+                    // IWbemServices pointer on connection dispose, so the object must not outlive it.
+                    handedOff = true;
+                    return new WmiInstance(connection, obj);
                 }
             }
             catch (Exception ex)
@@ -79,28 +118,42 @@ namespace ZenStates.Core.Hardware
                 Debug.WriteLine(ex.Message);
             }
 
+            if (!handedOff && connection != null)
+                connection.Dispose();
+
             return null;
         }
 
         public static List<string> GetWmiNamespaces(string root)
         {
             List<string> namespaces = new List<string>();
+            List<string> children = new List<string>();
+
             try
             {
-                using (ManagementClass nsClass = new ManagementClass(
-                    new ManagementScope(root), new ManagementPath("__namespace"), null))
-                using (ManagementObjectCollection instances = nsClass.GetInstances())
+                using (WmiScope scope = new WmiScope(root))
                 {
-                    foreach (var obj in instances)
+                    scope.Connect();
+
+                    foreach (WmiObject obj in scope.Connection.CreateQuery("SELECT * FROM __namespace"))
                     {
-                        using (var ns = (ManagementObject)obj)
+                        using (var ns = new WmiInstance(obj))
                         {
-                            string namespaceName = root + "\\" + ns["Name"];
+                            object name = ns.GetPropertyValue("Name");
+                            if (name == null)
+                                continue;
+
+                            string namespaceName = string.Concat(root, "\\", name);
                             namespaces.Add(namespaceName);
-                            namespaces.AddRange(GetWmiNamespaces(namespaceName));
+                            children.Add(namespaceName);
                         }
                     }
                 }
+
+                // Recurse only after the parent connection is released, so deep trees do not hold
+                // one open connection per level.
+                foreach (string child in children)
+                    namespaces.AddRange(GetWmiNamespaces(child));
 
                 namespaces.Sort(StringComparer.OrdinalIgnoreCase);
             }
@@ -115,23 +168,31 @@ namespace ZenStates.Core.Hardware
         public static List<string> GetClassNamesWithinWmiNamespace(string wmiNamespaceName)
         {
             List<string> classNames = new List<string>();
+
             try
             {
-                using (ManagementObjectSearcher searcher = new ManagementObjectSearcher
-                (new ManagementScope(wmiNamespaceName),
-                    new WqlObjectQuery("SELECT * FROM meta_class")))
+                using (WmiScope scope = new WmiScope(wmiNamespaceName))
                 {
-                    using (ManagementObjectCollection objectCollection = searcher.Get())
+                    scope.Connect();
+
+                    foreach (WmiObject obj in scope.Connection.CreateQuery("SELECT * FROM meta_class"))
                     {
-                        foreach (var obj in objectCollection)
+                        using (var wmiClass = new WmiInstance(obj))
                         {
-                            using (var wmiClass = (ManagementClass)obj)
+                            // For a class definition object __CLASS holds the class name itself.
+                            string name = wmiClass.ClassName;
+
+                            if (string.IsNullOrEmpty(name))
                             {
-                                string stringified = wmiClass.ToString();
-                                string[] parts = stringified.Split(':');
-                                if (parts.Length > 1)
-                                    classNames.Add(parts[1]);
+                                // Fallback: \\MACHINE\root\namespace:ClassName
+                                string path = wmiClass.Path;
+                                int separator = path == null ? -1 : path.LastIndexOf(':');
+                                if (separator >= 0)
+                                    name = path.Substring(separator + 1);
                             }
+
+                            if (!string.IsNullOrEmpty(name))
+                                classNames.Add(name);
                         }
                     }
                 }
@@ -148,7 +209,7 @@ namespace ZenStates.Core.Hardware
 
         public static string GetInstanceName(string scope, string wmiClass)
         {
-            using (ManagementObject queryObject = Query(scope, wmiClass))
+            using (WmiInstance queryObject = Query(scope, wmiClass))
             {
                 string name = "";
 
@@ -169,64 +230,71 @@ namespace ZenStates.Core.Hardware
             }
         }
 
-        public static ManagementBaseObject InvokeMethod(ManagementObject mo, string methodName, string inParamName, uint arg)
+        /// <summary>
+        /// Invokes <paramref name="methodName"/> on <paramref name="mo"/> and returns the out-parameter
+        /// object, or <c>null</c> when the method does not exist or the call fails.
+        /// </summary>
+        public static WmiInstance InvokeMethod(WmiInstance mo, string methodName, string inParamName, uint arg)
         {
-            try
-            {
-                using (ManagementBaseObject inParams = mo.GetMethodParameters(methodName))
-                {
-                    if (inParams != null && !String.IsNullOrEmpty(inParamName))
-                        inParams[inParamName] = arg;
-
-                    return mo.InvokeMethod(methodName, inParams, null);
-                }
-            }
-            catch (ManagementException)
-            {
+            if (mo == null)
                 return null;
-            }
-        }
 
-        public static ManagementBaseObject InvokeMethodAndGetValue(ManagementObject mo, string methodName, string propName,
-            string inParamName, uint arg)
-        {
+            WmiMethod method = null;
+            WmiMethodParameters inParams = null;
+
             try
             {
-                ManagementBaseObject outParams = InvokeMethod(mo, methodName, inParamName, arg);
-                return (ManagementBaseObject)outParams?.Properties[propName].Value;
+                method = mo.Native.GetMethod(methodName);
+                if (method == null)
+                    return null;
+
+                if (method.HasInParameters)
+                {
+                    inParams = method.CreateInParameters();
+
+                    if (inParams != null && !string.IsNullOrEmpty(inParamName))
+                        inParams.SetPropertyValue(inParamName, arg);
+                }
+
+                WmiMethodParameters outParams = null;
+
+                if (inParams != null)
+                    mo.Native.ExecuteMethod(method, inParams, out outParams);
+                else
+                    mo.Native.ExecuteMethod(method, out outParams);
+
+                return outParams == null ? null : new WmiInstance(outParams);
             }
             catch (Exception ex)
             {
                 Debug.WriteLine(ex.Message);
                 return null;
             }
+            finally
+            {
+                if (inParams != null)
+                    inParams.Dispose();
+
+                if (method != null)
+                    method.Dispose();
+            }
         }
 
-        public static byte[] RunCommand(ManagementObject mo, uint commandID, uint commandArg = 0x0)
+        public static WmiInstance InvokeMethodAndGetValue(WmiInstance mo, string methodName, string propName,
+            string inParamName, uint arg)
         {
             try
             {
-                using (ManagementBaseObject inParams = mo.GetMethodParameters("RunCommand"))
-                {
-                    byte[] buffer = new byte[8];
+                WmiInstance outParams = InvokeMethod(mo, methodName, inParamName, arg);
+                if (outParams == null)
+                    return null;
 
-                    var cmd = BitConverter.GetBytes(commandID);
-                    var arg = BitConverter.GetBytes(commandArg);
-
-                    Buffer.BlockCopy(cmd, 0, buffer, 0, 4);
-                    Buffer.BlockCopy(arg, 0, buffer, 4, 4);
-
-                    inParams["Inbuf"] = buffer;
-
-                    using (ManagementBaseObject outParams = mo.InvokeMethod("RunCommand", inParams, null))
-                    using (ManagementBaseObject pack = (ManagementBaseObject)outParams?.Properties["Outbuf"].Value)
-                    {
-                        byte[] result = (byte[])pack?.GetPropertyValue("Result");
-                        return result != null ? (byte[])result.Clone() : null;
-                    }
-                }
+                // The embedded object shares the out-parameter object's native resources, so the parent is
+                // deliberately not disposed here - the caller owns the returned instance and therefore its
+                // backing storage.
+                return (WmiInstance)outParams.GetPropertyValue(propName);
             }
-            catch (ManagementException ex)
+            catch (Exception ex)
             {
                 Debug.WriteLine(ex.Message);
                 return null;

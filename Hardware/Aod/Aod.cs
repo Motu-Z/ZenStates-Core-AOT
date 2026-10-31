@@ -2,7 +2,6 @@ using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Management;
 using System.Text;
 using ZenStates.Core.Common;
 using ZenStates.Core.Dictionaries;
@@ -528,37 +527,12 @@ namespace ZenStates.Core.Hardware.Aod
 
         public static Dictionary<string, uint> GetWmiFunctions()
         {
-            Dictionary<string, uint> dict = new Dictionary<string, uint>();
-
-#if NET8_0_OR_GREATER
-            if (!System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeCompiled)
-            {
-                Debug.WriteLine("Native AOT detected. Skipping WMI.");
-                return dict;
-            }
-#endif
-            if (IsNativeAotFallback())
-            {
-                return dict;
-            }
-
-            return GetWmiFunctionsImpl(dict);
-
+            // WMI access is AOT-safe now (WmiLight), so the platform capability probe also runs under
+            // Native AOT. The previous RuntimeFeature/Assembly.Location guards existed only because
+            // System.Management could not execute there; they are gone.
+            return GetWmiFunctionsImpl(new Dictionary<string, uint>());
         }
 
-        private static bool IsNativeAotFallback()
-        {
-            try
-            {
-                return string.IsNullOrEmpty(typeof(object).Assembly.Location);
-            }
-            catch
-            {
-                return true;
-            }
-        }
-
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private static Dictionary<string, uint> GetWmiFunctionsImpl(Dictionary<string, uint> dict)
         {
             try
@@ -571,10 +545,11 @@ namespace ZenStates.Core.Hardware.Aod
                 if (String.IsNullOrEmpty(instanceName))
                     return dict;
 
-                using (ManagementObject classInstance = new ManagementObject(wmiScope,
-                    $"{wmiAMDACPI}.InstanceName='{instanceName}'",
-                    null))
+                using (WmiInstance classInstance = WMI.GetInstance(wmiScope, wmiAMDACPI, instanceName))
                 {
+                    if (classInstance == null)
+                        return dict;
+
                     // Get function names with their IDs
                     string[] functionObjects = { "GetObjectID", "GetObjectID2" };
 
@@ -582,8 +557,10 @@ namespace ZenStates.Core.Hardware.Aod
                     {
                         try
                         {
-                            using (ManagementBaseObject outParams = WMI.InvokeMethod(classInstance, functionObject, null, 0))
-                            using (ManagementBaseObject pack = (ManagementBaseObject)outParams?.Properties["pack"].Value)
+                            using (WmiInstance outParams = WMI.InvokeMethod(classInstance, functionObject, null, 0))
+                            using (WmiInstance pack = outParams == null
+                                ? null
+                                : outParams.Properties["pack"].Value as WmiInstance)
                             {
                                 if (pack != null)
                                 {
