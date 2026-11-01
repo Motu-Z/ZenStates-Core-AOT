@@ -9,7 +9,7 @@
 
 ## Fork 与 AOT 变更
 
-本仓库是 irusanov 原版 ZenStates-Core 的维护分支，主要目的是为上层主项目 **Zentwik** 提供
+本仓库是 irusanov 原版 ZenStates-Core 的维护分支，主要目的是为 ZenStates-Core 提供
 **Native AOT 兼容**的底层支持，消除一切阻碍该库被 Native AOT（.NET ILC）应用消费的因素。
 
 相对上游的核心变更：
