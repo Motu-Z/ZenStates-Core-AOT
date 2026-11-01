@@ -2,8 +2,7 @@
 
 [English](README.md)
 
-> 这是 [`irusanov/ZenStates-Core`](https://github.com/irusanov/ZenStates-Core) 的
-> **Native AOT 兼容**维护分支，为上层主项目 **Zentwik** 提供 AOT-ready 的底层基础。
+> 这是 [`irusanov/ZenStates-Core`](https://github.com/irusanov/ZenStates-Core) 的 **Native AOT 兼容**维护分支。
 
 > [!IMPORTANT]
 > 本分支为 Native AOT 兼容版，WMI 相关功能（如 `AOD.GetWmiFunctions`）必须在管理员权限下运行。
