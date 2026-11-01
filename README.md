@@ -2,8 +2,7 @@
 
 [中文](README.zh-CN.md)
 
-> A **Native AOT-compatible** fork of [`irusanov/ZenStates-Core`](https://github.com/irusanov/ZenStates-Core),
-> maintained to provide the AOT-ready low-level foundation for the main project **Zentwik**.
+> A **Native AOT-compatible** fork of [`irusanov/ZenStates-Core`](https://github.com/irusanov/ZenStates-Core).
 
 > [!IMPORTANT]
 > This AOT fork runs WMI-backed features (e.g. `AOD.GetWmiFunctions`) only when elevated (Run as administrator).
