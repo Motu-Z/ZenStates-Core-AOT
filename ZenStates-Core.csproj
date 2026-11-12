@@ -2,7 +2,7 @@
   <PropertyGroup>
     <RootNamespace>ZenStates.Core</RootNamespace>
     <TargetFrameworks>netstandard2.1;net8.0-windows</TargetFrameworks>
-    <!-- The smoke-test host lives below this project; keep it out of the default **/*.cs glob. -->
+    <!-- 测试目录须排除出默认 glob。 -->
     <DefaultItemExcludes>$(DefaultItemExcludes);ZenStates.Core.Tests/**</DefaultItemExcludes>
     <AssemblyTitle>ZenStates.Core</AssemblyTitle>
     <Company>irusanov</Company>
@@ -39,10 +39,8 @@
 	<CheckForOverflowUnderflow>True</CheckForOverflowUnderflow>
 </PropertyGroup>
 <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
-	<!-- Native AOT: enables AOT compilation and compatibility analysis -->
 	<PublishAot>true</PublishAot>
 	<IsAotCompatible>true</IsAotCompatible>
-	<!-- Trim unused code on publish -->
 	<PublishTrimmed>true</PublishTrimmed>
 	<TrimmerRootDescriptor>AotRoots.xml</TrimmerRootDescriptor>
 </PropertyGroup>
@@ -89,8 +87,6 @@
     </None>
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' != 'net20'">
-    <!-- WmiLight replaces System.Management: pure managed+native WMI client with no
-         built-in COM activation, so it survives Native AOT (ILC) trimming. -->
     <PackageReference Include="WmiLight" Version="7.3.0" />
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="6.0.0">
     </PackageReference>

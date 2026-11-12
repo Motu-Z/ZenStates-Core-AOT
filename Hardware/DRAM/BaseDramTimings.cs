@@ -143,10 +143,7 @@ namespace ZenStates.Core.Hardware.DRAM
 
 #if NET8_0_OR_GREATER
         [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("Trimming", "IL2026",
-            Justification = "ConvertValue reflects over op_Implicit/op_Explicit of the DRAM timing property types, " +
-                            "which are members of this assembly and are preserved in full by AotRoots.xml. " +
-                            "Marking the public indexer [RequiresUnreferencedCode] instead would push the burden " +
-                            "onto every consumer, so the suppression is scoped here.")]
+            Justification = "Reflected members belong to this assembly and are preserved by AotRoots.xml.")]
 #endif
         public object this[string propertyName]
         {
@@ -192,17 +189,13 @@ namespace ZenStates.Core.Hardware.DRAM
 
 #if NET8_0_OR_GREATER
         [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("Trimming", "IL2075",
-            Justification = "Reflects over public properties of the concrete timing type in this assembly, " +
-                            "which is preserved in full by AotRoots.xml; the runtime type cannot be " +
-                            "annotated at this call site.")]
+            Justification = "Reflected properties belong to this assembly and are preserved by AotRoots.xml.")]
 #endif
         private PropertyInfo GetPropertyInfo(string propertyName)
         {
             PropertyInfo info = GetType().GetProperty(propertyName);
 
-            // Under a trimmed or NativeAOT build a missing property means the member was
-            // trimmed, not that the name was wrong — and the callers' null checks turn that
-            // into every timing silently reading as unset. Make it visible.
+            // Missing property in a trimmed build means the member was trimmed; timings would read as unset.
             if (info == null)
             {
                 Debug.WriteLine(

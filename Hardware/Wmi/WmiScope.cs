@@ -3,14 +3,6 @@ using WmiLight;
 
 namespace ZenStates.Core.Hardware
 {
-    /// <summary>
-    /// AOT-safe stand-in for <c>System.Management.ManagementScope</c>, backed by
-    /// <see cref="WmiConnection"/> from WmiLight.
-    /// </summary>
-    /// <remarks>
-    /// The scope owns an open connection for its whole lifetime. WmiLight's <c>Open()</c> is idempotent,
-    /// so <see cref="Connect"/> may be called repeatedly.
-    /// </remarks>
     public sealed class WmiScope : IDisposable
     {
         private readonly WmiConnection connection;
@@ -25,14 +17,8 @@ namespace ZenStates.Core.Hardware
             connection = new WmiConnection(scope);
         }
 
-        /// <summary>
-        /// The namespace this scope is bound to, e.g. <c>root\wmi</c>.
-        /// </summary>
         public string ScopePath { get; private set; }
 
-        /// <summary>
-        /// True once a WMI server/namespace binding has been established.
-        /// </summary>
         public bool IsConnected
         {
             get
@@ -44,9 +30,6 @@ namespace ZenStates.Core.Hardware
             }
         }
 
-        /// <summary>
-        /// Binds to the WMI namespace. Idempotent.
-        /// </summary>
         public void Connect()
         {
             if (disposed)

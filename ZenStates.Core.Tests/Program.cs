@@ -43,8 +43,6 @@ internal static class Program
     {
         Console.WriteLine("== ZenStates.Core smoke test ==");
 
-        // Cpu needs the PawnIO driver and an AMD CPU. Missing prerequisites are a SKIP, not a FAIL;
-        // only an unexpected exception counts as a regression.
         if (!ZenStates.Core.PawnIo.PawnIo.IsInstalled)
         {
             Skip("Cpu..ctor", "PawnIO driver not installed");
@@ -124,7 +122,6 @@ internal static class Program
                     if (user == null)
                         throw new Exception("GetOwner returned no User");
 
-                    // Kept API with no in-repo caller; it degrades to null here instead of throwing.
                     WMI.InvokeMethodAndGetValue(process, "GetOwner", "User", null, 0);
                     return "User=" + user;
                 }

@@ -527,9 +527,6 @@ namespace ZenStates.Core.Hardware.Aod
 
         public static Dictionary<string, uint> GetWmiFunctions()
         {
-            // WMI access is AOT-safe now (WmiLight), so the platform capability probe also runs under
-            // Native AOT. The previous RuntimeFeature/Assembly.Location guards existed only because
-            // System.Management could not execute there; they are gone.
             return GetWmiFunctionsImpl(new Dictionary<string, uint>());
         }
 

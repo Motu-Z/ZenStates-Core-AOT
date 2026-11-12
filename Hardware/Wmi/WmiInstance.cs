@@ -3,35 +3,13 @@ using WmiLight;
 
 namespace ZenStates.Core.Hardware
 {
-    /// <summary>
-    /// AOT-safe stand-in for <c>System.Management.ManagementObject</c> / <c>ManagementBaseObject</c>,
-    /// backed by <see cref="WmiObject"/> from WmiLight.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Lifetime: a <see cref="WmiInstance"/> handed out by <see cref="WMI.Query"/> or
-    /// <see cref="WMI.GetInstance"/> <b>owns</b> the underlying <see cref="WmiConnection"/> and disposes it
-    /// together with itself. Instances wrapping an embedded (child) object - e.g. the <c>pack</c> sub-object
-    /// of a WMI method's out parameters - do <b>not</b> own the connection: WmiLight releases the native
-    /// <c>IWbemServices</c> pointer on connection dispose, so the connection must outlive every object
-    /// obtained from it. Callers must therefore keep the parent instance alive while reading a child.
-    /// </para>
-    /// <para>
-    /// Ownership of native <see cref="WmiObject"/>s obtained from an enumerator is transferred to the
-    /// returned instance: WmiLight allocates a fresh wrapper per <c>MoveNext()</c> and the enumerator's
-    /// Dispose only releases the enumerator itself.
-    /// </para>
-    /// </remarks>
+    // WmiLight releases IWbemServices on connection dispose; child instances must not outlive their parent.
     public sealed class WmiInstance : IDisposable
     {
         private readonly WmiConnection connection;
         private WmiObject wmiObject;
         private bool disposed;
 
-        /// <summary>
-        /// Wraps an object that was obtained from <paramref name="connection"/>; the instance takes
-        /// ownership of the connection and disposes it.
-        /// </summary>
         internal WmiInstance(WmiConnection connection, WmiObject wmiObject)
         {
             if (connection == null)
@@ -41,9 +19,6 @@ namespace ZenStates.Core.Hardware
             this.wmiObject = wmiObject ?? throw new ArgumentNullException(nameof(wmiObject));
         }
 
-        /// <summary>
-        /// Wraps a child object (embedded instance) that is owned by another, still living instance.
-        /// </summary>
         internal WmiInstance(WmiObject wmiObject)
             : this(wmiObject, null)
         {
@@ -55,9 +30,6 @@ namespace ZenStates.Core.Hardware
             this.wmiObject = wmiObject ?? throw new ArgumentNullException(nameof(wmiObject));
         }
 
-        /// <summary>
-        /// The underlying WmiLight object. Accessing it after disposal throws.
-        /// </summary>
         internal WmiObject Native
         {
             get
@@ -69,44 +41,27 @@ namespace ZenStates.Core.Hardware
             }
         }
 
-        /// <summary>
-        /// The full WMI object path, e.g. <c>\\MACHINE\root\wmi:AMD_ACPI.InstanceName="ACPI"</c>.
-        /// </summary>
         public string Path
         {
             get { return Native.Path; }
         }
 
-        /// <summary>
-        /// The WMI class name of this object.
-        /// </summary>
         public string ClassName
         {
             get { return Native.Class; }
         }
 
-        /// <summary>
-        /// Gets or sets a property value by name. Equivalent to <c>ManagementBaseObject[name]</c>.
-        /// </summary>
         public object this[string propertyName]
         {
             get { return GetPropertyValue(propertyName); }
             set { SetPropertyValue(propertyName, value); }
         }
 
-        /// <summary>
-        /// Property accessor shaped like <c>ManagementBaseObject.Properties[name].Value</c>.
-        /// </summary>
         public PropertyCollection Properties
         {
             get { return new PropertyCollection(this); }
         }
 
-        /// <summary>
-        /// Reads a property. Embedded instances come back as <see cref="WmiInstance"/> (or
-        /// <see cref="WmiInstance"/>[] for embedded arrays), matching the way
-        /// <c>ManagementBaseObject.Properties[name].Value</c> exposed nested objects.
-        /// </summary>
         public object GetPropertyValue(string propertyName)
         {
             object value = Native.GetPropertyValue(propertyName);
@@ -128,23 +83,12 @@ namespace ZenStates.Core.Hardware
             return value;
         }
 
-        /// <summary>
-        /// Strongly typed variant of <see cref="GetPropertyValue(string)"/>.
-        /// </summary>
         public T GetPropertyValue<T>(string propertyName)
         {
             object value = GetPropertyValue(propertyName);
             return value == null ? default(T) : (T)value;
         }
 
-        /// <summary>
-        /// Sets a property value by name. Used for method in-parameters.
-        /// </summary>
-        /// <remarks>
-        /// WmiLight only exposes typed setters, so the value is dispatched by type. Byte arrays cannot be
-        /// marshalled by WmiLight 7.x (<c>WmiObject</c> has no <c>byte[]</c> setter) - the only consumer of
-        /// that shape was <c>WMI.RunCommand</c>, which is not part of this build.
-        /// </remarks>
         public void SetPropertyValue(string propertyName, object value)
         {
             WmiObject target = Native;
@@ -198,14 +142,10 @@ namespace ZenStates.Core.Hardware
             if (obj != null)
                 obj.Dispose();
 
-            // Only the instance that created the connection releases it; child objects leave it alone.
             if (connection != null)
                 connection.Dispose();
         }
 
-        /// <summary>
-        /// Minimal <c>ManagementBaseObject.Properties</c> replacement.
-        /// </summary>
         public sealed class PropertyCollection
         {
             private readonly WmiInstance owner;
@@ -221,9 +161,6 @@ namespace ZenStates.Core.Hardware
             }
         }
 
-        /// <summary>
-        /// Single property accessor exposing <see cref="Value"/>.
-        /// </summary>
         public sealed class WmiProperty
         {
             private readonly WmiInstance owner;
